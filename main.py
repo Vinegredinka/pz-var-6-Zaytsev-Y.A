@@ -1,0 +1,77 @@
+from scipy.special import spherical_jn, spherical_yn
+import matplotlib.pyplot as plt
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
+import tomllib  
+import numpy as np
+
+class RCS:
+    def __init__(self, D: float, N: int = 200): 
+        self.c = 3e8
+        self.N = N
+        self.r = D / 2
+
+    def hankel_third(self, n, k): 
+        return spherical_jn(n, k * self.r) + 1j * spherical_yn(n, k * self.r)
+
+    def a_n(self, n, k): 
+        return spherical_jn(n, k * self.r) / self.hankel_third(n, k)
+
+    def b_n(self, n, k): 
+        return (( k * self.r * spherical_jn(n - 1, k * self.r) - n * spherical_jn(n, k * self.r)) /
+            (k * self.r * self.hankel_third(n - 1, k) - n * self.hankel_third(n, k)))
+
+    def rcs(self, freq: np.ndarray, k: np.ndarray) -> np.ndarray: 
+        lmbd = self.c / freq
+        first_part = (lmbd ** 2) / np.pi
+        total_sum = np.zeros_like(lmbd, dtype=complex) 
+        for n in range(1, self.N + 1): 
+            total_sum += (-1)**n * (n + 0.5) * (self.b_n(n, k) - self.a_n(n, k))
+        return first_part * np.abs(total_sum) ** 2
+
+class XMLDataLoader: 
+    @staticmethod 
+    def save_to_xml(frequencies, sigmas, filename="output.xml"):
+        root = ET.Element("data") 
+        freqdata = ET.SubElement(root, "frequencydata") 
+        lambdadata = ET.SubElement(root, "lambdadata")
+        rcsdata = ET.SubElement(root, "rcsdata")
+        for f, s in zip(frequencies, sigmas): 
+            freq_elem = ET.SubElement(freqdata, "f")
+            freq_elem.text = str(f)
+            lambda_elem = ET.SubElement(lambdadata, "lambda")
+            lambda_elem.text = str(3e8 / f)
+            sigma_elem = ET.SubElement(rcsdata, "rcs")
+            sigma_elem.text = str(s)
+        rough_string = ET.tostring(root, "utf-8") 
+        reparsed = minidom.parseString(rough_string) 
+        pretty_xml = reparsed.toprettyxml(indent="  ") 
+        with open(filename, "w") as f:
+            f.write(pretty_xml)
+
+if __name__ == "__main__": 
+    with open("task_rcs_01.toml", "rb") as f:
+        data = tomllib.load(f) 
+        for data_list in data.items(): 
+            for item in data_list[1]:
+                if item["variant"] == 6: 
+                    D = float(item["D"])
+                    fmin = float(item["fmin"])
+                    fmax = float(item["fmax"])
+                    break 
+
+    freq = np.linspace(fmin, fmax, 90)
+    k = 2 * np.pi * freq / 3e8
+    sphere = RCS(D=D, N=90) 
+    sigmas = sphere.rcs(freq, k) 
+
+    XMLDataLoader.save_to_xml(freq, sigmas, filename="output.xml")
+
+    plt.plot(freq, sigmas)
+    plt.xlabel("f (Hz)")
+    plt.ylabel("RCS (m^2)")
+    plt.title("RCS(f) for a Sphere")
+    plt.grid()
+    plt.savefig("rcs_plot.png")
+    plt.show()
+
