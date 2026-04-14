@@ -1,1 +1,116 @@
+mport numpy as np 
+import matplotlib.pyplot as plt 
 
+
+def E_theta(theta):
+    return (np.cos(k * l * np.cos(theta)) - np.cos(k * l)) / np.sin(theta)
+
+
+def F(theta):
+    return abs(E_theta(theta)) / abs(E_theta(theta).max())
+
+
+def D_max(theta):
+    formula = (F(theta)**2 * np.sin(theta))
+    return 2 / np.trapezoid(formula, theta)
+
+def D(theta):
+    return F(theta)**2 * D_max(theta)
+
+
+def creating_plot(d_times, d_dB, theta):
+    fig, axs = plt.subplots(2, 2, figsize=(12,10), subplot_kw={'polar': False})
+    fig.suptitle('D(Theta)')
+
+    axs[0,0].plot(theta, d_times, color='blue')
+    axs[0,0].set_title("КНД")
+    axs[0,0].set_xlabel("θ (рад)")
+    axs[0,0].set_ylabel("D(θ)")
+    axs[0,0].grid(True)
+
+    axs[0,1].plot(theta, d_dB, color='red')
+    axs[0,1].set_title("КНД")
+    axs[0,1].set_xlabel("θ (рад)")
+    axs[0,1].set_ylabel("D(θ) [дБ]")
+    axs[0,1].grid(True)
+
+    axs[1,0] = plt.subplot(2,2,3, polar=True)
+    axs[1,0].plot(theta, d_times, color='blue')
+    axs[1,0].set_title("КНД полярный график")
+
+    axs[1,1] = plt.subplot(2,2,4, polar=True)
+    axs[1,1].plot(theta, d_dB, color='red')
+    axs[1,1].set_title("КНД полярный график")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.savefig('pythondata.png')
+    plt.show()
+    plt.close()
+
+if __name__ == "__main__":
+    f = 6e9
+    lmbd = 3e8 / f
+    l = lmbd / 2
+    k = 2 * np.pi / lmbd
+    theta = np.linspace(0.001, np.pi - 0.001, 100)
+
+    print(f'{D_max(theta=theta):.3f} times\n{20 * np.log10(D_max(theta=theta)):.3f} dB')
+    d_times = D(theta)
+    d_db = 20*np.log10(D(theta) + 1e-9)
+    creating_plot(d_times=d_times, d_dB=d_db, theta=theta)
+
+    cst_theta = []
+    cst_dB = []
+    cst_dtimes = []
+
+    with open("cst_results.txt", 'r', encoding='utf-8') as file:
+        for line in file:
+            _, theta_cst, dB = line.split()
+            theta_cst = theta_cst.replace(",", ".")
+            dB = dB.replace(",", ".")
+            cst_theta.append(np.deg2rad(float(theta_cst)))
+            cst_dB.append(float(dB))
+            cst_dtimes.append(10 ** (float(dB) / 10))
+
+
+    fig = plt.figure(figsize=(12, 10))
+    fig.suptitle('Python and CST')
+
+
+    ax1 = fig.add_subplot(2, 2, 1)  
+    ax2 = fig.add_subplot(2, 2, 2)  
+
+    ax1.plot(cst_theta, cst_dB, label='CST')
+    ax1.plot(theta, d_db, label='Python')
+    ax1.set_title('D, dBi')
+    ax1.set_xlabel("Theta")
+    ax1.set_ylabel("dBi")
+    ax1.grid(True)
+    ax1.legend()
+
+    ax2.plot(cst_theta, cst_dtimes, label='CST')
+    ax2.plot(theta, d_times, label='Python')
+    ax2.set_title('D, times')
+    ax2.set_xlabel("Theta")
+    ax2.set_ylabel("times")
+    ax2.grid(True)
+    ax2.legend()
+
+    ax3 = fig.add_subplot(2, 2, 3, polar=True)
+    ax4 = fig.add_subplot(2, 2, 4, polar=True)
+
+    ax3.plot(cst_theta, cst_dB, label='CST')
+    ax3.plot(theta, d_db, label='Python')
+    ax3.set_title('D, dBi (polar)')
+    ax3.grid(True)
+    ax3.legend()
+
+    ax4.plot(cst_theta, cst_dtimes, label='CST')
+    ax4.plot(theta, d_times, label='Python')
+    ax4.set_title('D, times (polar)')
+    ax4.grid(True)
+    ax4.legend()
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96]) 
+    plt.savefig("comparingdata.png")
+    plt.show()
